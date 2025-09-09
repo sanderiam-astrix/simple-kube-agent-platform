@@ -8,6 +8,23 @@ apt-get upgrade -y
 # Install required packages
 apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
 
+# Enable required kernel modules and networking
+echo "Setting up kernel modules and networking..."
+modprobe br_netfilter
+echo 'br_netfilter' >> /etc/modules-load.d/k8s.conf
+
+# Enable IP forwarding
+echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.conf
+echo 'net.bridge.bridge-nf-call-iptables = 1' >> /etc/sysctl.conf
+echo 'net.bridge.bridge-nf-call-ip6tables = 1' >> /etc/sysctl.conf
+
+# Apply sysctl settings
+sysctl --system
+
+# Ensure modules are loaded
+modprobe overlay
+modprobe br_netfilter
+
 # Add Kubernetes repository
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v${kubernetes_version}/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes-archive-keyring.gpg
 echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${kubernetes_version}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
@@ -45,8 +62,37 @@ rm -rf aws awscliv2.zip
 # Install Helm
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-# Initialize Kubernetes cluster
-kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+# Initialize Kubernetes cluster with retry logic
+echo "Initializing Kubernetes cluster..."
+MASTER_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+
+# Try kubeadm init with error handling
+for attempt in 1 2 3; do
+    echo "Attempt $attempt: Initializing Kubernetes cluster..."
+    if kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$MASTER_IP --ignore-preflight-errors=FileContent--proc-sys-net-bridge-bridge-nf-call-iptables,FileContent--proc-sys-net-ipv4-ip_forward; then
+        echo "Kubernetes cluster initialized successfully!"
+        break
+    else
+        echo "Attempt $attempt failed. Waiting 30 seconds before retry..."
+        sleep 30
+        
+        # Reset if this is not the last attempt
+        if [ $attempt -lt 3 ]; then
+            echo "Resetting kubeadm..."
+            kubeadm reset --force
+        fi
+    fi
+done
+
+# Verify initialization was successful
+if [ ! -f "/etc/kubernetes/admin.conf" ]; then
+    echo "ERROR: Kubernetes cluster initialization failed!"
+    echo "Checking kubelet status..."
+    systemctl status kubelet --no-pager -l
+    echo "Checking containerd status..."
+    systemctl status containerd --no-pager -l
+    exit 1
+fi
 
 # Configure kubectl for root user
 mkdir -p /root/.kube
@@ -54,7 +100,13 @@ cp -i /etc/kubernetes/admin.conf /root/.kube/config
 chown root:root /root/.kube/config
 
 # Install Flannel CNI
-kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+echo "Installing Flannel CNI..."
+if kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml; then
+    echo "Flannel CNI installed successfully"
+else
+    echo "ERROR: Failed to install Flannel CNI"
+    exit 1
+fi
 
 # Wait for nodes to be ready
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
@@ -133,6 +185,17 @@ if [ -f "/home/ubuntu/kubeconfig" ]; then
 else
     echo "ERROR: Kubeconfig was not created!"
 fi
+
+# Final cluster verification
+echo "=== Final Cluster Verification ==="
+echo "Checking cluster status..."
+kubectl get nodes
+echo
+echo "Checking system pods..."
+kubectl get pods -n kube-system
+echo
+echo "Checking kubelet status..."
+systemctl is-active kubelet
 
 # Create setup completion marker
 touch /var/log/k8s-setup-complete
