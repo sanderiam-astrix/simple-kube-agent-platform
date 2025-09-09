@@ -80,7 +80,7 @@ echo
 
 print_status "Next steps:"
 echo "1. Download kubeconfig:"
-echo "   scp -i ~/.ssh/$KEY_NAME ubuntu@$MASTER_IP:/home/ubuntu/kubeconfig ./kubeconfig"
+echo "   scp -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP:/home/ubuntu/kubeconfig ./kubeconfig"
 echo
 echo "2. Set up kubectl:"
 echo "   export KUBECONFIG=./kubeconfig"

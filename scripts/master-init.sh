@@ -116,29 +116,23 @@ chown ubuntu:ubuntu /home/ubuntu/join-cluster.sh
 kubectl wait --for=condition=available deployment/claude-code-agent -n ai-agent --timeout=300s
 
 # Create kubeconfig for external access
-cat <<EOF > /home/ubuntu/kubeconfig
-apiVersion: v1
-clusters:
-- cluster:
-    certificate-authority-data: $(cat /etc/kubernetes/pki/ca.crt | base64 -w 0)
-    server: https://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):6443
-  name: kubernetes
-contexts:
-- context:
-    cluster: kubernetes
-    user: kubernetes-admin
-  name: kubernetes-admin@kubernetes
-current-context: kubernetes-admin@kubernetes
-kind: Config
-users:
-- name: kubernetes-admin
-  user:
-    client-certificate-data: $(cat /etc/kubernetes/pki/apiserver.crt | base64 -w 0)
-    client-key-data: $(cat /etc/kubernetes/pki/apiserver.key | base64 -w 0)
-EOF
+# Copy the admin config and modify the server URL
+cp /etc/kubernetes/admin.conf /home/ubuntu/kubeconfig
+MASTER_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+
+# Update the server URL to use the public IP
+sed -i "s|server: https://.*:6443|server: https://$MASTER_IP:6443|g" /home/ubuntu/kubeconfig
 
 chown ubuntu:ubuntu /home/ubuntu/kubeconfig
 chmod 600 /home/ubuntu/kubeconfig
+
+# Verify kubeconfig was created
+if [ -f "/home/ubuntu/kubeconfig" ]; then
+    echo "Kubeconfig created successfully"
+    echo "Kubeconfig size: $(wc -c < /home/ubuntu/kubeconfig) bytes"
+else
+    echo "ERROR: Kubeconfig was not created!"
+fi
 
 # Create setup completion marker
 touch /var/log/k8s-setup-complete
@@ -146,3 +140,5 @@ touch /var/log/k8s-setup-complete
 echo "Kubernetes cluster setup completed successfully!"
 echo "Master node IP: $(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
 echo "Kubeconfig location: /home/ubuntu/kubeconfig"
+echo "To download kubeconfig:"
+echo "scp -i ~/.ssh/ai-agent-lab-dev-k8s-key.pem ubuntu@$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):/home/ubuntu/kubeconfig ./kubeconfig"

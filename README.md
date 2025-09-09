@@ -72,7 +72,7 @@ cd simple-kube-agent-platform
 
 # Get kubeconfig (CloudShell will handle SSH automatically)
 # The actual key name will be shown in the deployment output
-scp -i ~/.ssh/<key-name> ubuntu@<master-ip>:/home/ubuntu/kubeconfig ./kubeconfig
+scp -i ~/.ssh/<key-name>.pem ubuntu@<master-ip>:/home/ubuntu/kubeconfig ./kubeconfig
 export KUBECONFIG=./kubeconfig
 
 # Test the service (CloudShell optimized)
