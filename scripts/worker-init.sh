@@ -42,9 +42,32 @@ unzip awscliv2.zip
 ./aws/install
 rm -rf aws awscliv2.zip
 
+# Debug: Check what files are in /tmp
+echo "Debug: Checking /tmp directory contents..."
+ls -la /tmp/ | head -10
+
 # Install Claude Code
 echo "Installing Claude Code on worker node..."
-/tmp/install-claude-code.sh || echo "Claude Code installation failed, continuing with cluster setup..."
+if [ -f "/tmp/install-claude-code.sh" ]; then
+    echo "Claude Code installation script found, executing..."
+    chmod +x /tmp/install-claude-code.sh
+    if /tmp/install-claude-code.sh; then
+        echo "Claude Code installed successfully on worker node"
+        echo "Checking service status..."
+        systemctl status claude-code --no-pager -l || echo "Service status check failed"
+        echo "Testing service endpoints..."
+        curl -f http://localhost:8080/health || echo "Health endpoint not ready"
+        curl -f http://localhost:8080/status || echo "Status endpoint not ready"
+    else
+        echo "Claude Code installation failed, continuing with cluster setup..."
+        echo "Checking for any error logs..."
+        journalctl -u claude-code --no-pager -l || echo "No service logs found"
+    fi
+else
+    echo "Claude Code installation script not found at /tmp/install-claude-code.sh"
+    echo "Available files in /tmp:"
+    ls -la /tmp/ | grep -E "(install|claude)" || echo "No Claude-related files found"
+fi
 
 # Wait for master node to be ready
 echo "Waiting for master node to be ready..."

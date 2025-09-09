@@ -93,9 +93,13 @@ if [ "$BUILD_DOCKER" = "true" ]; then
     echo "   kubectl logs -n ai-agent deployment/claude-code-agent"
 else
     echo "   # Check Claude Code service on worker nodes"
-    echo "   ssh -i ~/.ssh/$KEY_NAME ubuntu@$MASTER_IP 'systemctl status claude-code'"
+    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP 'systemctl status claude-code'"
     echo "   # Test Claude Code service"
-    echo "   ssh -i ~/.ssh/$KEY_NAME ubuntu@$MASTER_IP 'curl http://localhost:8080/health'"
+    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP 'curl http://localhost:8080/health'"
+    echo "   # Debug: Check if service exists"
+    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP 'systemctl list-units | grep claude'"
+    echo "   # Debug: Check service logs"
+    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP 'journalctl -u claude-code --no-pager -l'"
 fi
 echo
 echo "4. Test the service:"
