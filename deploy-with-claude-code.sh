@@ -56,6 +56,7 @@ terraform apply tfplan
 print_status "Deployment completed! Getting connection information..."
 
 MASTER_IP=$(terraform output -raw k8s_master_public_ip)
+WORKER_IP=$(terraform output -json k8s_worker_public_ips | jq -r '.[0]')  # Get first worker IP
 S3_BUCKET=$(terraform output -raw s3_bucket_name)
 
 # Get the SSH key name
@@ -72,10 +73,11 @@ fi
 print_status "Deployment Summary:"
 echo "===================="
 echo "Master Node IP: $MASTER_IP"
+echo "Worker Node IP: $WORKER_IP"
 echo "S3 Bucket: $S3_BUCKET"
 echo "SSH Key: $KEY_NAME"
 echo "Region: us-east-2"
-echo "Claude Code: $(if [ "$BUILD_DOCKER" = "true" ]; then echo "Docker Image"; else echo "Direct Installation"; fi)"
+echo "Claude Code: $(if [ "$BUILD_DOCKER" = "true" ]; then echo "Docker Image"; else echo "Direct Installation on Worker"; fi)"
 echo
 
 print_status "Next steps:"
@@ -92,14 +94,14 @@ if [ "$BUILD_DOCKER" = "true" ]; then
     echo "   kubectl get pods -n ai-agent"
     echo "   kubectl logs -n ai-agent deployment/claude-code-agent"
 else
-    echo "   # Check Claude Code service on worker nodes"
-    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP 'systemctl status claude-code'"
+    echo "   # Check Claude Code service on worker nodes (IP: $WORKER_IP)"
+    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$WORKER_IP 'systemctl status claude-code'"
     echo "   # Test Claude Code service"
-    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP 'curl http://localhost:8080/health'"
+    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$WORKER_IP 'curl http://localhost:8080/health'"
     echo "   # Debug: Check if service exists"
-    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP 'systemctl list-units | grep claude'"
+    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$WORKER_IP 'systemctl list-units | grep claude'"
     echo "   # Debug: Check service logs"
-    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP 'journalctl -u claude-code --no-pager -l'"
+    echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$WORKER_IP 'journalctl -u claude-code --no-pager -l'"
 fi
 echo
 echo "4. Test the service:"

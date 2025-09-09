@@ -76,6 +76,7 @@ terraform apply tfplan
 print_status "Deployment completed! Getting connection information..."
 
 MASTER_IP=$(terraform output -raw k8s_master_public_ip)
+WORKER_IP=$(terraform output -json k8s_worker_public_ips | jq -r '.[0]')  # Get first worker IP
 S3_BUCKET=$(terraform output -raw s3_bucket_name)
 
 # Get the SSH key name
@@ -92,6 +93,7 @@ fi
 print_status "Deployment Summary:"
 echo "===================="
 echo "Master Node IP: $MASTER_IP"
+echo "Worker Node IP: $WORKER_IP"
 echo "S3 Bucket: $S3_BUCKET"
 echo "SSH Key: $KEY_NAME"
 echo "Region: us-east-2"
@@ -108,6 +110,8 @@ echo "   kubectl get nodes"
 echo
 echo "3. Check AI agent status:"
 echo "   kubectl get pods -n ai-agent"
+echo "   # Check Claude Code service on worker node (IP: $WORKER_IP)"
+echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$WORKER_IP 'systemctl status claude-code'"
 echo
 echo "4. Test AI agent service:"
 echo "   kubectl port-forward -n ai-agent svc/claude-code-service 8080:80 &"
