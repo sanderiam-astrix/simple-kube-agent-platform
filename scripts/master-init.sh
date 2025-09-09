@@ -172,30 +172,7 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 EOF
 
-# Create AI agent deployment with proper configuration
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-
-# Update the deployment with correct account ID
-sed "s/ACCOUNT_ID/$ACCOUNT_ID/g" /tmp/ai-agent-deployment.yaml > /tmp/ai-agent-deployment-updated.yaml
-kubectl apply -f /tmp/ai-agent-deployment-updated.yaml
-
-# Generate join command for workers
-JOIN_COMMAND=$(kubeadm token create --print-join-command)
-echo "#!/bin/bash" > /home/ubuntu/join-cluster.sh
-echo "set -e" >> /home/ubuntu/join-cluster.sh
-echo "sudo $JOIN_COMMAND" >> /home/ubuntu/join-cluster.sh
-chmod +x /home/ubuntu/join-cluster.sh
-chown ubuntu:ubuntu /home/ubuntu/join-cluster.sh
-
-# Wait for deployment to be ready (if it exists)
-if kubectl get deployment claude-code-agent -n ai-agent >/dev/null 2>&1; then
-    echo "Waiting for AI agent deployment to be ready..."
-    kubectl wait --for=condition=available deployment/claude-code-agent -n ai-agent --timeout=300s
-else
-    echo "AI agent deployment not found, skipping wait..."
-fi
-
-# Create kubeconfig for external access
+# Create kubeconfig for external access (do this first to ensure it's always created)
 echo "Creating kubeconfig for external access..."
 # Copy the admin config and modify the server URL
 cp /etc/kubernetes/admin.conf /home/ubuntu/kubeconfig
@@ -212,6 +189,46 @@ mkdir -p /home/ubuntu/.kube
 cp /home/ubuntu/kubeconfig /home/ubuntu/.kube/config
 chown ubuntu:ubuntu /home/ubuntu/.kube/config
 chmod 600 /home/ubuntu/.kube/config
+
+echo "Kubeconfig created successfully!"
+
+# Create AI agent deployment with proper configuration (optional)
+echo "Setting up AI agent deployment..."
+if [ -f "/tmp/ai-agent-deployment.yaml" ]; then
+    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    
+    # Update the deployment with correct account ID
+    sed "s/ACCOUNT_ID/$ACCOUNT_ID/g" /tmp/ai-agent-deployment.yaml > /tmp/ai-agent-deployment-updated.yaml
+    
+    if kubectl apply -f /tmp/ai-agent-deployment-updated.yaml; then
+        echo "AI agent deployment created successfully"
+    else
+        echo "WARNING: Failed to create AI agent deployment, continuing..."
+    fi
+else
+    echo "WARNING: AI agent deployment file not found, skipping..."
+fi
+
+# Generate join command for workers
+echo "Generating worker join command..."
+if JOIN_COMMAND=$(kubeadm token create --print-join-command 2>/dev/null); then
+    echo "#!/bin/bash" > /home/ubuntu/join-cluster.sh
+    echo "set -e" >> /home/ubuntu/join-cluster.sh
+    echo "sudo $JOIN_COMMAND" >> /home/ubuntu/join-cluster.sh
+    chmod +x /home/ubuntu/join-cluster.sh
+    chown ubuntu:ubuntu /home/ubuntu/join-cluster.sh
+    echo "Worker join command created successfully"
+else
+    echo "WARNING: Failed to generate join command, continuing..."
+fi
+
+# Wait for deployment to be ready (if it exists)
+if kubectl get deployment claude-code-agent -n ai-agent >/dev/null 2>&1; then
+    echo "Waiting for AI agent deployment to be ready..."
+    kubectl wait --for=condition=available deployment/claude-code-agent -n ai-agent --timeout=300s
+else
+    echo "AI agent deployment not found, skipping wait..."
+fi
 
 # Verify kubeconfig was created
 if [ -f "/home/ubuntu/kubeconfig" ]; then
@@ -235,8 +252,11 @@ systemctl is-active kubelet
 # Create setup completion marker
 touch /var/log/k8s-setup-complete
 
+echo "=========================================="
 echo "Kubernetes cluster setup completed successfully!"
+echo "=========================================="
 echo "Master node IP: $(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
 echo "Kubeconfig location: /home/ubuntu/kubeconfig"
 echo "To download kubeconfig:"
 echo "scp -i ~/.ssh/ai-agent-lab-dev-k8s-key.pem ubuntu@$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):/home/ubuntu/kubeconfig ./kubeconfig"
+echo "=========================================="
