@@ -71,7 +71,8 @@ cd simple-kube-agent-platform
 ./deploy.sh
 
 # Get kubeconfig (CloudShell will handle SSH automatically)
-scp -i ~/.ssh/ai-agent-lab-dev-k8s-key ubuntu@<master-ip>:/home/ubuntu/kubeconfig ./kubeconfig
+# The actual key name will be shown in the deployment output
+scp -i ~/.ssh/<key-name> ubuntu@<master-ip>:/home/ubuntu/kubeconfig ./kubeconfig
 export KUBECONFIG=./kubeconfig
 
 # Test the service (CloudShell optimized)
@@ -121,8 +122,8 @@ rm -rf /tmp/terraform-plugin-cache
 
 3. **Get Cluster Access**:
    ```bash
-   # Download kubeconfig
-   scp -i ~/.ssh/ai-agent-lab-dev-k8s-key ubuntu@<master-ip>:/home/ubuntu/kubeconfig ./kubeconfig
+   # Download kubeconfig (use the key name shown in deployment output)
+   scp -i ~/.ssh/<key-name> ubuntu@<master-ip>:/home/ubuntu/kubeconfig ./kubeconfig
    
    # Set up kubectl
    export KUBECONFIG=./kubeconfig

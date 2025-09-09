@@ -67,3 +67,8 @@ output "ssh_connect_workers" {
   description = "SSH commands to connect to worker nodes"
   value       = [for i, worker in aws_instance.k8s_workers : "ssh -i ~/.ssh/${var.key_pair_name != "" ? var.key_pair_name : "${local.name_prefix}-k8s-key"} ubuntu@${worker.public_ip}"]
 }
+
+output "ssh_key_name" {
+  description = "Name of the SSH key pair used for EC2 instances"
+  value       = var.key_pair_name != "" ? var.key_pair_name : "${local.name_prefix}-k8s-key"
+}

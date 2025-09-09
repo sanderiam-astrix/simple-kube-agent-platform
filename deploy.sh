@@ -77,7 +77,9 @@ print_status "Deployment completed! Getting connection information..."
 
 MASTER_IP=$(terraform output -raw k8s_master_public_ip)
 S3_BUCKET=$(terraform output -raw s3_bucket_name)
-KEY_NAME=$(terraform output -raw key_pair_name 2>/dev/null || echo "auto-generated")
+
+# Get the SSH key name
+KEY_NAME=$(terraform output -raw ssh_key_name)
 
 print_status "Deployment Summary:"
 echo "===================="
