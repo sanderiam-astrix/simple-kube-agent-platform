@@ -7,6 +7,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Source Terraform setup
+source "$(dirname "$0")/scripts/terraform-setup.sh"
+
 print_status() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }

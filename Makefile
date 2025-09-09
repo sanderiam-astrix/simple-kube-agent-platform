@@ -17,18 +17,23 @@ help:
 
 # Initialize Terraform
 init:
+	@echo "Setting up Terraform directories for CloudShell..."
+	@source scripts/terraform-setup.sh
 	terraform init
 
 # Plan infrastructure
 plan:
+	@source scripts/terraform-setup.sh
 	terraform plan
 
 # Apply infrastructure
 apply:
+	@source scripts/terraform-setup.sh
 	terraform apply -auto-approve
 
 # Destroy infrastructure
 destroy:
+	@source scripts/terraform-setup.sh
 	terraform destroy -auto-approve
 
 # Show cluster status

@@ -55,6 +55,7 @@ This setup is optimized for **AWS CloudShell** usage:
 - All commands work within CloudShell environment
 - Health check endpoints for CLI monitoring
 - JSON status endpoints for programmatic access
+- **Terraform data stored in /tmp** to work within CloudShell space limitations
 
 #### CloudShell-Specific Commands
 
@@ -63,7 +64,10 @@ This setup is optimized for **AWS CloudShell** usage:
 git clone <your-repo-url>
 cd simple-kube-agent-platform
 
-# Deploy the infrastructure
+# Set up Terraform directories for CloudShell (optional - scripts do this automatically)
+./setup-terraform-dirs.sh
+
+# Deploy the infrastructure (automatically configures Terraform directories)
 ./deploy.sh
 
 # Get kubeconfig (CloudShell will handle SSH automatically)
@@ -74,6 +78,23 @@ export KUBECONFIG=./kubeconfig
 kubectl port-forward -n ai-agent svc/claude-code-service 8080:80 &
 curl http://localhost:8080/health
 curl http://localhost:8080/status
+```
+
+#### CloudShell Space Management
+
+Due to CloudShell space limitations, Terraform data is automatically stored in `/tmp`:
+
+```bash
+# Check Terraform directory usage
+du -sh /tmp/tfdata
+du -sh /tmp/terraform-plugin-cache
+
+# Clean up Terraform data if needed
+rm -rf /tmp/tfdata
+rm -rf /tmp/terraform-plugin-cache
+
+# Reconfigure Terraform directories
+./setup-terraform-dirs.sh
 ```
 
 ## Quick Start
@@ -386,6 +407,18 @@ ssh -i ~/.ssh/<key-name> ubuntu@<worker-ip> 'curl -v http://localhost:8080/statu
 
 # Test Claude Code installation
 ssh -i ~/.ssh/<key-name> ubuntu@<worker-ip> 'which claude-code || echo "Claude Code not found"'
+
+# Terraform directory issues (CloudShell)
+# Check if Terraform directories are set correctly
+echo "TF_DATA_DIR: $TF_DATA_DIR"
+echo "TF_PLUGIN_CACHE_DIR: $TF_PLUGIN_CACHE_DIR"
+
+# Reconfigure Terraform directories
+./setup-terraform-dirs.sh
+
+# Check disk space
+df -h /tmp
+du -sh /tmp/tfdata /tmp/terraform-plugin-cache 2>/dev/null || echo "Terraform directories not found"
 ```
 
 ## Cost Optimization
@@ -485,10 +518,12 @@ For issues and questions:
 ├── Dockerfile.claude-code          # Claude Code Docker image
 ├── build-claude-code.sh            # Docker build script
 ├── deploy-with-claude-code.sh      # Enhanced deployment script
+├── setup-terraform-dirs.sh         # Terraform directory setup for CloudShell
 ├── scripts/
 │   ├── master-init.sh              # Master node initialization
 │   ├── worker-init.sh              # Worker node initialization
-│   └── install-claude-code.sh      # Claude Code installation script
+│   ├── install-claude-code.sh      # Claude Code installation script
+│   └── terraform-setup.sh          # Terraform directory configuration
 ├── deploy.sh                       # Standard deployment script
 ├── destroy.sh                      # Cleanup script
 ├── Makefile                        # Management commands
