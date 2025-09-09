@@ -1,12 +1,22 @@
 #!/bin/bash
-set -e
+# Don't exit on errors - we'll handle them explicitly
+set +e
 
 # Update system
-apt-get update
-apt-get upgrade -y
+echo "Updating system packages..."
+if ! apt-get update; then
+    echo "WARNING: apt-get update failed, continuing..."
+fi
+if ! apt-get upgrade -y; then
+    echo "WARNING: apt-get upgrade failed, continuing..."
+fi
 
 # Install required packages
-apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+echo "Installing required packages..."
+if ! apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release; then
+    echo "ERROR: Failed to install required packages"
+    exit 1
+fi
 
 # Enable required kernel modules and networking
 echo "Setting up kernel modules and networking..."
@@ -94,6 +104,33 @@ if [ ! -f "/etc/kubernetes/admin.conf" ]; then
     exit 1
 fi
 
+# CRITICAL: Create kubeconfig immediately after successful Kubernetes init
+# This ensures it's created even if other parts of the script fail
+echo "=========================================="
+echo "Creating kubeconfig for external access..."
+echo "=========================================="
+
+# Copy the admin config and modify the server URL
+cp /etc/kubernetes/admin.conf /home/ubuntu/kubeconfig
+MASTER_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+
+# Update the server URL to use the public IP
+sed -i "s|server: https://.*:6443|server: https://$MASTER_IP:6443|g" /home/ubuntu/kubeconfig
+
+chown ubuntu:ubuntu /home/ubuntu/kubeconfig
+chmod 600 /home/ubuntu/kubeconfig
+
+# Also create a copy in the standard location for ubuntu user
+mkdir -p /home/ubuntu/.kube
+cp /home/ubuntu/kubeconfig /home/ubuntu/.kube/config
+chown ubuntu:ubuntu /home/ubuntu/.kube/config
+chmod 600 /home/ubuntu/.kube/config
+
+echo "✅ Kubeconfig created successfully!"
+echo "Location: /home/ubuntu/kubeconfig"
+echo "Size: $(wc -c < /home/ubuntu/kubeconfig) bytes"
+echo "=========================================="
+
 # Configure kubectl for root user
 mkdir -p /root/.kube
 cp -i /etc/kubernetes/admin.conf /root/.kube/config
@@ -172,25 +209,7 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 EOF
 
-# Create kubeconfig for external access (do this first to ensure it's always created)
-echo "Creating kubeconfig for external access..."
-# Copy the admin config and modify the server URL
-cp /etc/kubernetes/admin.conf /home/ubuntu/kubeconfig
-MASTER_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-
-# Update the server URL to use the public IP
-sed -i "s|server: https://.*:6443|server: https://$MASTER_IP:6443|g" /home/ubuntu/kubeconfig
-
-chown ubuntu:ubuntu /home/ubuntu/kubeconfig
-chmod 600 /home/ubuntu/kubeconfig
-
-# Also create a copy in the standard location for ubuntu user
-mkdir -p /home/ubuntu/.kube
-cp /home/ubuntu/kubeconfig /home/ubuntu/.kube/config
-chown ubuntu:ubuntu /home/ubuntu/.kube/config
-chmod 600 /home/ubuntu/.kube/config
-
-echo "Kubeconfig created successfully!"
+# Kubeconfig already created above - this section removed to avoid duplication
 
 # Create AI agent deployment with proper configuration (optional)
 echo "Setting up AI agent deployment..."
@@ -252,11 +271,21 @@ systemctl is-active kubelet
 # Create setup completion marker
 touch /var/log/k8s-setup-complete
 
+# Final status report - this always runs
 echo "=========================================="
-echo "Kubernetes cluster setup completed successfully!"
+echo "Kubernetes cluster setup completed!"
 echo "=========================================="
 echo "Master node IP: $(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
 echo "Kubeconfig location: /home/ubuntu/kubeconfig"
+
+# Verify kubeconfig exists
+if [ -f "/home/ubuntu/kubeconfig" ]; then
+    echo "✅ Kubeconfig: READY"
+    echo "Size: $(wc -c < /home/ubuntu/kubeconfig) bytes"
+else
+    echo "❌ Kubeconfig: MISSING"
+fi
+
 echo "To download kubeconfig:"
 echo "scp -i ~/.ssh/ai-agent-lab-dev-k8s-key.pem ubuntu@$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):/home/ubuntu/kubeconfig ./kubeconfig"
 echo "=========================================="
