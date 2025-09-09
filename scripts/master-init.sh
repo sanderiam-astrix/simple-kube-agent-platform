@@ -99,6 +99,29 @@ mkdir -p /root/.kube
 cp -i /etc/kubernetes/admin.conf /root/.kube/config
 chown root:root /root/.kube/config
 
+# Wait for API server to be ready
+echo "Waiting for Kubernetes API server to be ready..."
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
+# Wait for API server with timeout
+for i in {1..30}; do
+    if kubectl get nodes --request-timeout=5s >/dev/null 2>&1; then
+        echo "API server is ready!"
+        break
+    else
+        echo "Waiting for API server... (attempt $i/30)"
+        sleep 10
+    fi
+done
+
+# Verify API server is accessible
+if ! kubectl get nodes --request-timeout=10s >/dev/null 2>&1; then
+    echo "ERROR: API server is not accessible after 5 minutes"
+    echo "Checking API server status..."
+    systemctl status kube-apiserver --no-pager -l
+    exit 1
+fi
+
 # Install Flannel CNI
 echo "Installing Flannel CNI..."
 if kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml; then
@@ -164,10 +187,16 @@ echo "sudo $JOIN_COMMAND" >> /home/ubuntu/join-cluster.sh
 chmod +x /home/ubuntu/join-cluster.sh
 chown ubuntu:ubuntu /home/ubuntu/join-cluster.sh
 
-# Wait for deployment to be ready
-kubectl wait --for=condition=available deployment/claude-code-agent -n ai-agent --timeout=300s
+# Wait for deployment to be ready (if it exists)
+if kubectl get deployment claude-code-agent -n ai-agent >/dev/null 2>&1; then
+    echo "Waiting for AI agent deployment to be ready..."
+    kubectl wait --for=condition=available deployment/claude-code-agent -n ai-agent --timeout=300s
+else
+    echo "AI agent deployment not found, skipping wait..."
+fi
 
 # Create kubeconfig for external access
+echo "Creating kubeconfig for external access..."
 # Copy the admin config and modify the server URL
 cp /etc/kubernetes/admin.conf /home/ubuntu/kubeconfig
 MASTER_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
@@ -177,6 +206,12 @@ sed -i "s|server: https://.*:6443|server: https://$MASTER_IP:6443|g" /home/ubunt
 
 chown ubuntu:ubuntu /home/ubuntu/kubeconfig
 chmod 600 /home/ubuntu/kubeconfig
+
+# Also create a copy in the standard location for ubuntu user
+mkdir -p /home/ubuntu/.kube
+cp /home/ubuntu/kubeconfig /home/ubuntu/.kube/config
+chown ubuntu:ubuntu /home/ubuntu/.kube/config
+chmod 600 /home/ubuntu/.kube/config
 
 # Verify kubeconfig was created
 if [ -f "/home/ubuntu/kubeconfig" ]; then
