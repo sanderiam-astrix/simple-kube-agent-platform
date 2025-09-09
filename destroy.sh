@@ -34,7 +34,7 @@ print_warning "This action cannot be undone!"
 
 # Show what will be destroyed
 print_status "Planning destruction..."
-terraform plan -destroy
+terraform plan -destroy -detailed-exitcode
 
 echo
 read -p "Are you sure you want to destroy all resources? Type 'yes' to confirm: " -r

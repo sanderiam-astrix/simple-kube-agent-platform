@@ -10,6 +10,7 @@
 *.pem
 *.key
 id_rsa*
+ai-agent-lab-dev-k8s-key.pem
 
 # Kubeconfig
 kubeconfig

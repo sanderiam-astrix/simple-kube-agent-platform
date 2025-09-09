@@ -122,8 +122,9 @@ rm -rf /tmp/terraform-plugin-cache
 
 3. **Get Cluster Access**:
    ```bash
+   # The SSH key is automatically copied to ~/.ssh/ during deployment
    # Download kubeconfig (use the key name shown in deployment output)
-   scp -i ~/.ssh/<key-name> ubuntu@<master-ip>:/home/ubuntu/kubeconfig ./kubeconfig
+   scp -i ~/.ssh/<key-name>.pem ubuntu@<master-ip>:/home/ubuntu/kubeconfig ./kubeconfig
    
    # Set up kubectl
    export KUBECONFIG=./kubeconfig

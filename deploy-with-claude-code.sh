@@ -61,6 +61,14 @@ S3_BUCKET=$(terraform output -raw s3_bucket_name)
 # Get the SSH key name
 KEY_NAME=$(terraform output -raw ssh_key_name)
 
+# Copy the private key to ~/.ssh/ if it was auto-generated
+if [ -f "${KEY_NAME}.pem" ]; then
+    print_status "Copying SSH private key to ~/.ssh/"
+    cp "${KEY_NAME}.pem" ~/.ssh/
+    chmod 600 ~/.ssh/"${KEY_NAME}.pem"
+    print_status "SSH key copied to ~/.ssh/${KEY_NAME}.pem"
+fi
+
 print_status "Deployment Summary:"
 echo "===================="
 echo "Master Node IP: $MASTER_IP"

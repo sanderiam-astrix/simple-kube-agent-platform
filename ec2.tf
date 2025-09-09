@@ -29,6 +29,16 @@ resource "aws_key_pair" "k8s_key" {
   tags = local.common_tags
 }
 
+# Save the private key to local filesystem
+resource "local_file" "k8s_private_key" {
+  count    = var.key_pair_name == "" ? 1 : 0
+  filename = "${path.module}/${local.name_prefix}-k8s-key.pem"
+  content  = tls_private_key.k8s_key[0].private_key_pem
+  file_permission = "0600"
+
+  depends_on = [tls_private_key.k8s_key]
+}
+
 # Kubernetes Master Node
 resource "aws_instance" "k8s_master" {
   ami                    = data.aws_ami.ubuntu.id
