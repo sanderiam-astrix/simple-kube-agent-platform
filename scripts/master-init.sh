@@ -74,12 +74,14 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Initialize Kubernetes cluster with retry logic
 echo "Initializing Kubernetes cluster..."
-MASTER_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+MASTER_PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+MASTER_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
 
 # Try kubeadm init with error handling
 for attempt in 1 2 3; do
     echo "Attempt $attempt: Initializing Kubernetes cluster..."
-    if kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$MASTER_IP --ignore-preflight-errors=FileContent--proc-sys-net-bridge-bridge-nf-call-iptables,FileContent--proc-sys-net-ipv4-ip_forward; then
+    echo "Private IP: $MASTER_PRIVATE_IP, Public IP: $MASTER_PUBLIC_IP"
+    if kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=$MASTER_PRIVATE_IP --apiserver-cert-extra-sans=$MASTER_PUBLIC_IP --ignore-preflight-errors=FileContent--proc-sys-net-bridge-bridge-nf-call-iptables,FileContent--proc-sys-net-ipv4-ip_forward; then
         echo "Kubernetes cluster initialized successfully!"
         break
     else
@@ -112,10 +114,11 @@ echo "=========================================="
 
 # Copy the admin config and modify the server URL
 cp /etc/kubernetes/admin.conf /home/ubuntu/kubeconfig
-MASTER_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+MASTER_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+MASTER_PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 
-# Update the server URL to use the public IP
-sed -i "s|server: https://.*:6443|server: https://$MASTER_IP:6443|g" /home/ubuntu/kubeconfig
+# Update the server URL to use the public IP (certificate should now include this)
+sed -i "s|server: https://.*:6443|server: https://$MASTER_PUBLIC_IP:6443|g" /home/ubuntu/kubeconfig
 
 chown ubuntu:ubuntu /home/ubuntu/kubeconfig
 chmod 600 /home/ubuntu/kubeconfig
@@ -126,8 +129,15 @@ cp /home/ubuntu/kubeconfig /home/ubuntu/.kube/config
 chown ubuntu:ubuntu /home/ubuntu/.kube/config
 chmod 600 /home/ubuntu/.kube/config
 
+# Create alternative kubeconfig using private IP (for troubleshooting)
+cp /etc/kubernetes/admin.conf /home/ubuntu/kubeconfig-private
+sed -i "s|server: https://.*:6443|server: https://$MASTER_PRIVATE_IP:6443|g" /home/ubuntu/kubeconfig-private
+chown ubuntu:ubuntu /home/ubuntu/kubeconfig-private
+chmod 600 /home/ubuntu/kubeconfig-private
+
 echo "✅ Kubeconfig created successfully!"
-echo "Location: /home/ubuntu/kubeconfig"
+echo "Location: /home/ubuntu/kubeconfig (public IP: $MASTER_PUBLIC_IP)"
+echo "Alternative: /home/ubuntu/kubeconfig-private (private IP: $MASTER_PRIVATE_IP)"
 echo "Size: $(wc -c < /home/ubuntu/kubeconfig) bytes"
 echo "=========================================="
 
@@ -288,4 +298,6 @@ fi
 
 echo "To download kubeconfig:"
 echo "scp -i ~/.ssh/ai-agent-lab-dev-k8s-key.pem ubuntu@$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):/home/ubuntu/kubeconfig ./kubeconfig"
+echo "Alternative (if certificate issues):"
+echo "scp -i ~/.ssh/ai-agent-lab-dev-k8s-key.pem ubuntu@$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):/home/ubuntu/kubeconfig-private ./kubeconfig"
 echo "=========================================="

@@ -98,8 +98,9 @@ echo "Region: us-east-2"
 echo
 
 print_status "Next steps:"
-echo "1. Download kubeconfig:"
+echo "1. Wait for cluster to finish initializing (up to 5 minutes), then download kubeconfig:"
 echo "   scp -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP:/home/ubuntu/kubeconfig ./kubeconfig"
+echo "   # Alternative (if certificate issues): scp -i ~/.ssh/$KEY_NAME.pem ubuntu@$MASTER_IP:/home/ubuntu/kubeconfig-private ./kubeconfig"
 echo
 echo "2. Set up kubectl:"
 echo "   export KUBECONFIG=./kubeconfig"
