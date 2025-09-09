@@ -1,0 +1,19 @@
+# AWS Configuration
+aws_region = "us-east-2"
+
+# Project Configuration
+project_name = "ai-agent-lab"
+environment  = "dev"
+
+# Instance Configuration
+instance_type_master = "t3.medium"
+instance_type_worker = "t3.small"
+worker_count         = 1
+
+# Security Configuration
+key_pair_name = ""  # Leave empty to auto-generate, or specify existing key pair name
+allowed_cidr_blocks = ["0.0.0.0/0"]  # Restrict this to your IP range for better security
+
+# Kubernetes Configuration
+kubernetes_version = "1.28"
+enable_sidecar     = true

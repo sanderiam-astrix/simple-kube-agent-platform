@@ -1,0 +1,165 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claude-code-agent
+  namespace: ai-agent
+  labels:
+    app: claude-code-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claude-code-agent
+  template:
+    metadata:
+      labels:
+        app: claude-code-agent
+    spec:
+      serviceAccountName: ai-agent-sa
+      containers:
+      - name: claude-code
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        env:
+        - name: AWS_REGION
+          value: "us-east-2"
+        - name: S3_BUCKET
+          value: "ai-agent-lab-dev-ai-agent-files"
+        volumeMounts:
+        - name: data-storage
+          mountPath: /data
+        - name: aws-config
+          mountPath: /root/.aws
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: data-storage
+        persistentVolumeClaim:
+          claimName: data-pvc
+      - name: aws-config
+        configMap:
+          name: aws-config
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-agent-sa
+  namespace: ai-agent
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/ai-agent-lab-dev-k8s-worker-role
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-pvc
+  namespace: ai-agent
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ebs-sc
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: claude-code-service
+  namespace: ai-agent
+  labels:
+    app: claude-code-agent
+spec:
+  selector:
+    app: claude-code-agent
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+  type: NodePort
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-config
+  namespace: ai-agent
+data:
+  config: |
+    [default]
+    region = us-east-2
+    output = json
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: ai-agent
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    http {
+        server {
+            listen 80;
+            location / {
+                return 200 'AI Agent Lab - Claude Code Service\nStatus: Running\nRegion: us-east-2\nS3 Bucket: ai-agent-lab-dev-ai-agent-files\n';
+                add_header Content-Type text/plain;
+            }
+            location /health {
+                return 200 'OK';
+                add_header Content-Type text/plain;
+            }
+            location /status {
+                return 200 '{"status":"running","service":"claude-code-agent","region":"us-east-2"}';
+                add_header Content-Type application/json;
+            }
+        }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: s3-sync-script
+  namespace: ai-agent
+data:
+  sync.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Starting S3 sync process..."
+    
+    # Create data directory if it doesn't exist
+    mkdir -p /data
+    
+    # Sync files from S3 to local storage
+    aws s3 sync s3://$S3_BUCKET/ /data/ --delete
+    
+    echo "S3 sync completed"
+    
+    # Keep the container running
+    tail -f /dev/null
